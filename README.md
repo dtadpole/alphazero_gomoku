@@ -1,6 +1,6 @@
 # AlphaZero Gomoku
 
-This is an implementation of Gomoku game with AlphaZero
+This is an implementation of Gomoku game with AlphaZero, a.k.a. Five in a Row
 
 The code is built on python3, with pytorch and asyncio
 
@@ -18,7 +18,7 @@ To train model with a single process using GPU (0 is the GPU id):
 
 ---
 
-To train model with a using distributed processes (1 training server, multiple inference servers):
+To train model with distributed processes (1 training server, multiple inference servers):
 
 <code>python train.py --model_cuda 0 [--memory_server 127.0.0.1 --memory_port 8080]</code>
 
