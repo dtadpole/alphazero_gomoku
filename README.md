@@ -24,6 +24,8 @@ To train model with a using distributed processes (1 training server, multiple i
 
 <code>python play.py --model_cuda 0 [--memory_server 127.0.0.1 --memory_port 8080]</code>
 
+<code>python play.py --model_cuda 1 [--memory_server 127.0.0.1 --memory_port 8080]</code>
+
 ---
 
 Trained models are stored in the following directory by default:
