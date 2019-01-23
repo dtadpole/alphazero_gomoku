@@ -4,7 +4,7 @@ This is an implementation of Gomoku game with AlphaZero, a.k.a. Five in a Row
 
 The code is built on python3, with pytorch and asyncio.
 
-The implementation supports multiple inference servers. Tensorrt inference is an option.
+This implementation supports multiple asynchronous inference servers. Tensorrt inference is an option.
 
 ---
 
