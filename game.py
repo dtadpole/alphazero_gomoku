@@ -10,7 +10,7 @@ class Game:
 
     def __init__(self, args):
 
-        self.HISTORY = 1
+        self.HISTORY = 3
 
         self._args   = args
 

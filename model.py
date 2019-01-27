@@ -166,35 +166,28 @@ class Model(nn.Module):
             self.v1     = nn.Linear(self.CHANNELS_V*(self._size_x)*(self._size_y), 256)
             self.v2     = nn.Linear(256, 1)
 
-        elif args.model_arch == 'convbn':
-
-            self.conv1  = nn.Conv2d(self._state_layer, self.CHANNELS, kernel_size=3, stride=1, padding=1, bias=False)
-            self.bn1    = nn.BatchNorm2d(self.CHANNELS)
-
-            self.conv2  = nn.Conv2d(self.CHANNELS, self.CHANNELS*2, kernel_size=3, stride=1, padding=1, bias=False)
-            self.bn2    = nn.BatchNorm2d(self.CHANNELS*2)
-
-            self.conv3  = nn.Conv2d(self.CHANNELS*2, self.CHANNELS*4, kernel_size=3, stride=1, padding=1, bias=False)
-            self.bn3    = nn.BatchNorm2d(self.CHANNELS*4)
-
-            # policy head
-            self.pc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_P, kernel_size=1, stride=1, bias=False)
-            self.pc_bn  = nn.BatchNorm2d(self.CHANNELS_P)
-
-            self.p1     = nn.Linear(self.CHANNELS_P*(self._size_x)*(self._size_y), self._action_size)
-
-            # value head
-            self.vc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_V, kernel_size=1, stride=1, bias=False)
-            self.vc_bn  = nn.BatchNorm2d(self.CHANNELS_V)
-
-            self.v1     = nn.Linear(self.CHANNELS_V*(self._size_x)*(self._size_y), 64)
-            self.v2     = nn.Linear(64, 1)
-            
-        elif args.model_arch == 'conv':
+        elif args.model_arch == 'conv4':
 
             self.conv1  = nn.Conv2d(self._state_layer, self.CHANNELS, kernel_size=3, stride=1, padding=1)
             self.conv2  = nn.Conv2d(self.CHANNELS, self.CHANNELS*2, kernel_size=3, stride=1, padding=1)
             self.conv3  = nn.Conv2d(self.CHANNELS*2, self.CHANNELS*4, kernel_size=3, stride=1, padding=1)
+            self.conv4  = nn.Conv2d(self.CHANNELS*4, self.CHANNELS*4, kernel_size=3, stride=1, padding=1)
+
+            # policy head
+            self.pc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_P, kernel_size=1, stride=1)
+            self.p1     = nn.Linear(self.CHANNELS_P*(self._size_x)*(self._size_y), self._action_size)
+
+            # value head
+            self.vc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_V, kernel_size=1, stride=1)
+            self.v1     = nn.Linear(self.CHANNELS_V*(self._size_x)*(self._size_y), 64)
+            self.v2     = nn.Linear(64, 1)
+            
+        elif args.model_arch == 'conv3':
+
+            self.conv1  = nn.Conv2d(self._state_layer, self.CHANNELS, kernel_size=3, stride=1, padding=1)
+            self.conv2  = nn.Conv2d(self.CHANNELS, self.CHANNELS*2, kernel_size=3, stride=1, padding=1)
+            self.conv3  = nn.Conv2d(self.CHANNELS*2, self.CHANNELS*4, kernel_size=3, stride=1, padding=1)
+            #self.conv4  = nn.Conv2d(self.CHANNELS*4, self.CHANNELS*4, kernel_size=3, stride=1, padding=1)
 
             # policy head
             self.pc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_P, kernel_size=1, stride=1)
@@ -229,9 +222,15 @@ class Model(nn.Module):
             
     def forward(self, s):
         
+        #intermediate = s
+        
         if self._args.model_arch == 'resnet':
+
+            s = self.resnet_input_conv(s)
             
-            s = F.relu(self.resnet_input_bn(self.resnet_input_conv(s)))
+            #intermediate = s
+
+            s = F.relu(self.resnet_input_bn(s))
 
             orig = s
             s = F.relu(self.resnet_01a_bn(self.resnet_01a_conv(s)))
@@ -315,7 +314,7 @@ class Model(nn.Module):
             policy = F.relu(self.pc_bn(self.pc(s)))                                  # policy conv2d 1x1
             policy = policy.view(-1, self.CHANNELS_P*(self._size_x)*(self._size_y))  # flattern
             policy = self.p1(policy)                                                 # dense
-            policy = F.log_softmax(policy, dim=1)                                        # softmax
+            policy = F.log_softmax(policy, dim=1)                                    # softmax
 
             # value head
             value  = F.relu(self.vc_bn(self.vc(s)))                                  # value conv2d 1x1
@@ -324,27 +323,28 @@ class Model(nn.Module):
             value  = self.v2(value)                                                  # dense
             value  = torch.tanh(value)                                               # tanh
 
-        elif self._args.model_arch == 'convbn':
+        elif self._args.model_arch == 'conv4':
 
             s = s.view(-1, self._state_layer, self._size_x, self._size_y)             # batch_size x num_channels x s_x x s_y
-            s = F.relu(self.bn1(self.conv1(s)))                                      # batch_size x num_channels x s_x x s_y
-            s = F.relu(self.bn2(self.conv2(s)))                                      # batch_size x num_channels x s_x x s_y
-            s = F.relu(self.bn3(self.conv3(s)))                                      # batch_size x num_channels x s_x x s_y
+            s = F.relu(self.conv1(s))                                                # batch_size x num_channels x s_x x s_y
+            s = F.relu(self.conv2(s))                                                # batch_size x num_channels x s_x x s_y
+            s = F.relu(self.conv3(s))                                                # batch_size x num_channels x s_x x s_y
+            s = F.relu(self.conv4(s))                                                # batch_size x num_channels x s_x x s_y
 
             # policy head
-            policy = F.relu(self.pc_bn(self.pc(s)))                                  # policy conv2d 1x1
+            policy = F.relu(self.pc(s))                                              # policy conv2d 1x1
             policy = policy.view(-1, self.CHANNELS_P*(self._size_x)*(self._size_y))  # flattern
             policy = self.p1(policy)                                                 # dense
-            policy = F.log_softmax(policy, dim=1)                                        # softmax
+            policy = F.log_softmax(policy, dim=1)                                    # softmax
 
             # value head
-            value  = F.relu(self.vc_bn(self.vc(s)))                                  # value conv2d 1x1
+            value  = F.relu(self.vc(s))                                              # value conv2d 1x1
             value  = value.view(-1, self.CHANNELS_V*(self._size_x)*(self._size_y))   # flattern
             value  = F.relu(self.v1(value))                                          # dense
             value  = self.v2(value)                                                  # dense
             value  = torch.tanh(value)                                               # tanh
 
-        elif self._args.model_arch == 'conv':
+        elif self._args.model_arch == 'conv3':
             
             s = s.view(-1, self._state_layer, self._size_x, self._size_y)             # batch_size x num_channels x s_x x s_y
             s = F.relu(self.conv1(s))                                                # batch_size x num_channels x s_x x s_y
@@ -369,6 +369,7 @@ class Model(nn.Module):
             raise Exception("unknown model arch : %s" % args.model_arch)
             
         return policy, value
+        #return policy, value, intermediate
     
 
     
@@ -556,10 +557,12 @@ class Model(nn.Module):
         boards = boards.view(-1, self._state_layer, self._size_x, self._size_y)
         #self.eval()
         with torch.no_grad():
+            #policy, value, intermediate = self(boards)
             policy, value = self(boards)
 
         #print("policy :", policy)
         #print("value  :", value)
+        #return np.exp(policy.data.cpu().numpy()[0]), value.data.cpu().numpy()[0], intermediate
         return np.exp(policy.data.cpu().numpy()[0]), value.data.cpu().numpy()[0]
 
 
@@ -634,6 +637,7 @@ class Model(nn.Module):
         h_game_input    = board.astype(np.dtype(self._args.play_dtype))
         h_policy_output = np.empty(self._action_size, dtype = np.dtype(self._args.play_dtype))
         h_value_output  = np.empty(1, dtype = np.dtype(self._args.play_dtype))
+        #h_intermediate_output = np.empty(self.CHANNELS * self._size_x * self._size_y, dtype = np.dtype(self._args.play_dtype))
 
         #print(h_game_input.nbytes, h_policy_output.nbytes, h_value_output.nbytes)
         
@@ -648,24 +652,93 @@ class Model(nn.Module):
         self.trt_context.execute_async(bindings=[int(self.trt_d_game_input), 
                                                  int(self.trt_d_policy_output),
                                                  int(self.trt_d_value_output)],
+                                                 #int(self.trt_d_value_output),
+                                                 #int(self.trt_d_intermediate_output)],
                                        stream_handle=self.trt_stream.handle)
 
         cuda.memcpy_dtoh_async(h_policy_output, self.trt_d_policy_output, self.trt_stream)
         cuda.memcpy_dtoh_async(h_value_output, self.trt_d_value_output, self.trt_stream)
+        #cuda.memcpy_dtoh_async(h_intermediate_output, self.trt_d_intermediate_output, self.trt_stream)
 
         # Synchronize the stream
         self.trt_stream.synchronize()
 
+        #return h_policy_output, h_value_output, h_intermediate_output
         return h_policy_output, h_value_output
         
 
 
+    def _trt_res_layer(self, input_layer, weights, name="01", dtype=np.float32):
     
-        
+        if dtype == np.dtype('float32'):
+            trt_type = trt.float32
+            #print('float32')
+        elif dtype == np.dtype('float16'):
+            trt_type = trt.float16
+            #print('float16')
+        elif dtype == np.dtype('int32'):
+            trt_type = trt.int32
+            #print('int32')
+        elif dtype == np.dtype('int8'):
+            trt_type = trt.int8
+            #print('int8')
+        else:
+            raise Exception("Unknown data type [%s]" % dtype)
+            
+        # conv x_a
+        conv_x_a_w = weights['resnet_'+name+'a_conv.weight'].detach().cpu().numpy().astype(dtype)
+        conv_x_a   = self.trt_network.add_convolution(input_layer.get_output(0),
+                                                      num_output_maps=self.CHANNELS,
+                                                      kernel_shape=(3, 3), kernel=conv_x_a_w,
+                                                      bias=trt.Weights())
+        conv_x_a.stride    = (1, 1)
+        conv_x_a.padding   = (1, 1)
+        conv_x_a.precision = trt_type
+
+        conv_x_a_bn_w = weights['resnet_'+name+'a_bn.weight'].detach().cpu().numpy().astype(dtype)
+        conv_x_a_bn_b = weights['resnet_'+name+'a_bn.bias'].detach().cpu().numpy().astype(dtype)
+        conv_x_a_bn   = self.trt_network.add_scale(conv_x_a.get_output(0),
+                                                   mode=trt.tensorrt.ScaleMode.CHANNEL,
+                                                   shift=conv_x_a_bn_b, scale=conv_x_a_bn_w,
+                                                   power=np.ones_like(conv_x_a_bn_w, dtype=dtype))
+        conv_x_a_bn.precision = trt_type
+
+        conv_x_a_actv           = self.trt_network.add_activation(conv_x_a_bn.get_output(0), trt.ActivationType.RELU)
+        conv_x_a_actv.precision = trt_type
+
+        # conv_x_b
+        conv_x_b_w = weights['resnet_'+name+'b_conv.weight'].detach().cpu().numpy().astype(dtype)
+        conv_x_b   = self.trt_network.add_convolution(conv_x_a_actv.get_output(0),
+                                                      num_output_maps=self.CHANNELS,
+                                                      kernel_shape=(3, 3), kernel=conv_x_b_w,
+                                                      bias=trt.Weights())
+        conv_x_b.stride    = (1, 1)
+        conv_x_b.padding   = (1, 1)
+        conv_x_b.precision = trt_type
+
+        conv_x_b_bn_w = weights['resnet_'+name+'b_bn.weight'].detach().cpu().numpy().astype(dtype)
+        conv_x_b_bn_b = weights['resnet_'+name+'b_bn.bias'].detach().cpu().numpy().astype(dtype)
+        conv_x_b_bn   = self.trt_network.add_scale(conv_x_b.get_output(0),
+                                                   mode=trt.tensorrt.ScaleMode.CHANNEL,
+                                                   shift=conv_x_b_bn_b, scale=conv_x_b_bn_w,
+                                                   power=np.ones_like(conv_x_b_bn_w, dtype=dtype))
+        conv_x_b_bn.precision = trt_type
+
+        conv_x_b_res  = self.trt_network.add_elementwise(conv_x_b_bn.get_output(0),
+                                                         input_layer.get_output(0),
+                                                         trt.tensorrt.ElementWiseOperation.SUM)
+        conv_x_b_res.precision = trt_type
+
+        conv_x_b_actv = self.trt_network.add_activation(conv_x_b_res.get_output(0), trt.ActivationType.RELU)
+        conv_x_b_actv.precision = trt_type
+
+        return conv_x_b_actv
+    
+
     def build_trt_engine(self, state_dict, dtype=np.float32):
         
-        if self._args.model_arch != "conv":
-            raise Exception("Unsupport model arch [%s]" % self._model_arch)
+        if self._args.model_arch != "conv3" and self._args.model_arch != "conv4" and self._args.model_arch != "resnet":
+            raise Exception("Unsupport model arch [%s]" % self._args.model_arch)
 
         if dtype == np.dtype('float32'):
             trt_type = trt.float32
@@ -708,97 +781,323 @@ class Model(nn.Module):
         #weights = dict(self.named_parameters())
         weights = state_dict
 
-        # common convolution network
-        conv1_w = weights['conv1.weight'].detach().cpu().numpy().astype(dtype)
-        conv1_b = weights['conv1.bias'].detach().cpu().numpy().astype(dtype)
-        conv1   = self.trt_network.add_convolution(input=input_tensor, num_output_maps=self.CHANNELS,
-                                                   kernel_shape=(3, 3), kernel=conv1_w, bias=conv1_b)
-        conv1.stride    = (1, 1)
-        conv1.padding   = (1, 1)
-        conv1.precision = trt_type
+        if self._args.model_arch == "conv3":
+            
+            # common convolution network
+            conv1_w = weights['conv1.weight'].detach().cpu().numpy().astype(dtype)
+            conv1_b = weights['conv1.bias'].detach().cpu().numpy().astype(dtype)
+            conv1   = self.trt_network.add_convolution(input=input_tensor, num_output_maps=self.CHANNELS,
+                                                       kernel_shape=(3, 3), kernel=conv1_w, bias=conv1_b)
+            conv1.stride    = (1, 1)
+            conv1.padding   = (1, 1)
+            conv1.precision = trt_type
 
-        conv1_actv           = self.trt_network.add_activation(conv1.get_output(0), trt.ActivationType.RELU)
-        conv1_actv.precision = trt_type
+            #intermediate = conv1
+            #intermediate.get_output(0).name = "INTERMEDIATE"
+            
+            conv1_actv           = self.trt_network.add_activation(conv1.get_output(0), trt.ActivationType.RELU)
+            conv1_actv.precision = trt_type
 
-        conv2_w = weights['conv2.weight'].detach().cpu().numpy().astype(dtype)
-        conv2_b = weights['conv2.bias'].detach().cpu().numpy().astype(dtype)
-        conv2   = self.trt_network.add_convolution(conv1_actv.get_output(0), num_output_maps=self.CHANNELS*2,
-                                                   kernel_shape=(3, 3), kernel=conv2_w, bias=conv2_b)
-        conv2.stride    = (1, 1)
-        conv2.padding   = (1, 1)
-        conv2.precision = trt_type
+            conv2_w = weights['conv2.weight'].detach().cpu().numpy().astype(dtype)
+            conv2_b = weights['conv2.bias'].detach().cpu().numpy().astype(dtype)
+            conv2   = self.trt_network.add_convolution(conv1_actv.get_output(0), num_output_maps=self.CHANNELS*2,
+                                                       kernel_shape=(3, 3), kernel=conv2_w, bias=conv2_b)
+            conv2.stride    = (1, 1)
+            conv2.padding   = (1, 1)
+            conv2.precision = trt_type
 
-        conv2_actv           = self.trt_network.add_activation(conv2.get_output(0), trt.ActivationType.RELU)
-        conv2_actv.precision = trt_type
+            conv2_actv           = self.trt_network.add_activation(conv2.get_output(0), trt.ActivationType.RELU)
+            conv2_actv.precision = trt_type
 
-        conv3_w = weights['conv3.weight'].detach().cpu().numpy().astype(dtype)
-        conv3_b = weights['conv3.bias'].detach().cpu().numpy().astype(dtype)
-        conv3   = self.trt_network.add_convolution(conv2_actv.get_output(0), num_output_maps=self.CHANNELS*4,
-                                                   kernel_shape=(3, 3), kernel=conv3_w, bias=conv3_b)
-        conv3.stride    = (1, 1)
-        conv3.padding   = (1, 1)
-        conv3.precision = trt_type
+            conv3_w = weights['conv3.weight'].detach().cpu().numpy().astype(dtype)
+            conv3_b = weights['conv3.bias'].detach().cpu().numpy().astype(dtype)
+            conv3   = self.trt_network.add_convolution(conv2_actv.get_output(0), num_output_maps=self.CHANNELS*4,
+                                                       kernel_shape=(3, 3), kernel=conv3_w, bias=conv3_b)
+            conv3.stride    = (1, 1)
+            conv3.padding   = (1, 1)
+            conv3.precision = trt_type
 
-        conv3_actv           = self.trt_network.add_activation(conv3.get_output(0), trt.ActivationType.RELU)
-        conv3_actv.precision = trt_type
+            conv3_actv           = self.trt_network.add_activation(conv3.get_output(0), trt.ActivationType.RELU)
+            conv3_actv.precision = trt_type
 
-        # policy head
-        pc_w = weights['pc.weight'].detach().cpu().numpy().astype(dtype)
-        pc_b = weights['pc.bias'].detach().cpu().numpy().astype(dtype)
-        pc   = self.trt_network.add_convolution(conv3_actv.get_output(0), num_output_maps=self.CHANNELS_P,
-                                                kernel_shape=(1, 1), kernel=pc_w, bias=pc_b)
-        pc.stride    = (1, 1)
-        pc.precision = trt_type
+            #conv4_w = weights['conv4.weight'].detach().cpu().numpy().astype(dtype)
+            #conv4_b = weights['conv4.bias'].detach().cpu().numpy().astype(dtype)
+            #conv4   = self.trt_network.add_convolution(conv3_actv.get_output(0), num_output_maps=self.CHANNELS*4,
+            #                                           kernel_shape=(3, 3), kernel=conv4_w, bias=conv4_b)
+            #conv4.stride    = (1, 1)
+            #conv4.padding   = (1, 1)
+            #conv4.precision = trt_type
 
-        pc_actv           = self.trt_network.add_activation(pc.get_output(0), trt.ActivationType.RELU)
-        pc_actv.precision = trt_type
+            #conv4_actv           = self.trt_network.add_activation(conv4.get_output(0), trt.ActivationType.RELU)
+            #conv4_actv.precision = trt_type
 
-        p1_w = weights['p1.weight'].detach().cpu().numpy().astype(dtype)
-        p1_b = weights['p1.bias'].detach().cpu().numpy().astype(dtype)
-        p1   = self.trt_network.add_fully_connected(pc_actv.get_output(0), num_outputs=self._action_size,
-                                                    kernel=p1_w, bias=p1_b)
-        p1.precision = trt_type
+            # policy head
+            pc_w = weights['pc.weight'].detach().cpu().numpy().astype(dtype)
+            pc_b = weights['pc.bias'].detach().cpu().numpy().astype(dtype)
+            pc   = self.trt_network.add_convolution(conv3_actv.get_output(0), num_output_maps=self.CHANNELS_P,
+                                                    kernel_shape=(1, 1), kernel=pc_w, bias=pc_b)
+            pc.stride    = (1, 1)
+            pc.precision = trt_type
 
-        p1_softmax = self.trt_network.add_softmax(p1.get_output(0))
-        p1_softmax.get_output(0).name = "POLICY"
-        p1_softmax.precision = trt_type
+            pc_actv           = self.trt_network.add_activation(pc.get_output(0), trt.ActivationType.RELU)
+            pc_actv.precision = trt_type
 
-        # value head
-        vc_w = weights['vc.weight'].detach().cpu().numpy().astype(dtype)
-        vc_b = weights['vc.bias'].detach().cpu().numpy().astype(dtype)
-        vc   = self.trt_network.add_convolution(conv3_actv.get_output(0), num_output_maps=self.CHANNELS_V,
-                                                kernel_shape=(1,1), kernel=vc_w, bias=vc_b)
-        vc.stride    = (1, 1)
-        vc.precision = trt_type
+            p1_w = weights['p1.weight'].detach().cpu().numpy().astype(dtype)
+            p1_b = weights['p1.bias'].detach().cpu().numpy().astype(dtype)
+            p1   = self.trt_network.add_fully_connected(pc_actv.get_output(0), num_outputs=self._action_size,
+                                                        kernel=p1_w, bias=p1_b)
+            p1.precision = trt_type
 
-        vc_actv           = self.trt_network.add_activation(vc.get_output(0), trt.ActivationType.RELU)
-        vc_actv.precision = trt_type
+            p1_softmax = self.trt_network.add_softmax(p1.get_output(0))
+            p1_softmax.get_output(0).name = "POLICY"
+            p1_softmax.precision = trt_type
 
-        v1_w = weights['v1.weight'].detach().cpu().numpy().astype(dtype)
-        v1_b = weights['v1.bias'].detach().cpu().numpy().astype(dtype)
-        v1   = self.trt_network.add_fully_connected(vc_actv.get_output(0), num_outputs=64, kernel=v1_w, bias=v1_b)
-        v1.precision = trt_type
+            # value head
+            vc_w = weights['vc.weight'].detach().cpu().numpy().astype(dtype)
+            vc_b = weights['vc.bias'].detach().cpu().numpy().astype(dtype)
+            vc   = self.trt_network.add_convolution(conv3_actv.get_output(0), num_output_maps=self.CHANNELS_V,
+                                                    kernel_shape=(1,1), kernel=vc_w, bias=vc_b)
+            vc.stride    = (1, 1)
+            vc.precision = trt_type
 
-        v1_actv           = self.trt_network.add_activation(v1.get_output(0), trt.ActivationType.RELU)
-        v1_actv.precision = trt_type
+            vc_actv           = self.trt_network.add_activation(vc.get_output(0), trt.ActivationType.RELU)
+            vc_actv.precision = trt_type
 
+            v1_w = weights['v1.weight'].detach().cpu().numpy().astype(dtype)
+            v1_b = weights['v1.bias'].detach().cpu().numpy().astype(dtype)
+            v1   = self.trt_network.add_fully_connected(vc_actv.get_output(0), num_outputs=64, kernel=v1_w, bias=v1_b)
+            v1.precision = trt_type
 
-        v2_w = weights['v2.weight'].detach().cpu().numpy().astype(dtype)
-        v2_b = weights['v2.bias'].detach().cpu().numpy().astype(dtype)
-        v2   = self.trt_network.add_fully_connected(v1_actv.get_output(0), num_outputs=1, kernel=v2_w, bias=v2_b)
-        v2.precision = trt_type
+            v1_actv           = self.trt_network.add_activation(v1.get_output(0), trt.ActivationType.RELU)
+            v1_actv.precision = trt_type
 
-        v2_tanh = self.trt_network.add_activation(v2.get_output(0), trt.ActivationType.TANH)
-        v2_tanh.get_output(0).name = "VALUE"
-        v2_tanh.precision = trt_type
+            v2_w = weights['v2.weight'].detach().cpu().numpy().astype(dtype)
+            v2_b = weights['v2.bias'].detach().cpu().numpy().astype(dtype)
+            v2   = self.trt_network.add_fully_connected(v1_actv.get_output(0), num_outputs=1, kernel=v2_w, bias=v2_b)
+            v2.precision = trt_type
 
-        #print(p1_softmax.precision)
-        #print(v2_tanh.precision)
+            v2_tanh = self.trt_network.add_activation(v2.get_output(0), trt.ActivationType.TANH)
+            v2_tanh.get_output(0).name = "VALUE"
+            v2_tanh.precision = trt_type
+
+            #print(p1_softmax.precision)
+            #print(v2_tanh.precision)
+            
+        if self._args.model_arch == "conv4":
+            
+            # common convolution network
+            conv1_w = weights['conv1.weight'].detach().cpu().numpy().astype(dtype)
+            conv1_b = weights['conv1.bias'].detach().cpu().numpy().astype(dtype)
+            conv1   = self.trt_network.add_convolution(input=input_tensor, num_output_maps=self.CHANNELS,
+                                                       kernel_shape=(3, 3), kernel=conv1_w, bias=conv1_b)
+            conv1.stride    = (1, 1)
+            conv1.padding   = (1, 1)
+            conv1.precision = trt_type
+
+            #intermediate = conv1
+            #intermediate.get_output(0).name = "INTERMEDIATE"
+            
+            conv1_actv           = self.trt_network.add_activation(conv1.get_output(0), trt.ActivationType.RELU)
+            conv1_actv.precision = trt_type
+
+            conv2_w = weights['conv2.weight'].detach().cpu().numpy().astype(dtype)
+            conv2_b = weights['conv2.bias'].detach().cpu().numpy().astype(dtype)
+            conv2   = self.trt_network.add_convolution(conv1_actv.get_output(0), num_output_maps=self.CHANNELS*2,
+                                                       kernel_shape=(3, 3), kernel=conv2_w, bias=conv2_b)
+            conv2.stride    = (1, 1)
+            conv2.padding   = (1, 1)
+            conv2.precision = trt_type
+
+            conv2_actv           = self.trt_network.add_activation(conv2.get_output(0), trt.ActivationType.RELU)
+            conv2_actv.precision = trt_type
+
+            conv3_w = weights['conv3.weight'].detach().cpu().numpy().astype(dtype)
+            conv3_b = weights['conv3.bias'].detach().cpu().numpy().astype(dtype)
+            conv3   = self.trt_network.add_convolution(conv2_actv.get_output(0), num_output_maps=self.CHANNELS*4,
+                                                       kernel_shape=(3, 3), kernel=conv3_w, bias=conv3_b)
+            conv3.stride    = (1, 1)
+            conv3.padding   = (1, 1)
+            conv3.precision = trt_type
+
+            conv3_actv           = self.trt_network.add_activation(conv3.get_output(0), trt.ActivationType.RELU)
+            conv3_actv.precision = trt_type
+
+            conv4_w = weights['conv4.weight'].detach().cpu().numpy().astype(dtype)
+            conv4_b = weights['conv4.bias'].detach().cpu().numpy().astype(dtype)
+            conv4   = self.trt_network.add_convolution(conv3_actv.get_output(0), num_output_maps=self.CHANNELS*4,
+                                                       kernel_shape=(3, 3), kernel=conv4_w, bias=conv4_b)
+            conv4.stride    = (1, 1)
+            conv4.padding   = (1, 1)
+            conv4.precision = trt_type
+
+            conv4_actv           = self.trt_network.add_activation(conv4.get_output(0), trt.ActivationType.RELU)
+            conv4_actv.precision = trt_type
+
+            # policy head
+            pc_w = weights['pc.weight'].detach().cpu().numpy().astype(dtype)
+            pc_b = weights['pc.bias'].detach().cpu().numpy().astype(dtype)
+            pc   = self.trt_network.add_convolution(conv4_actv.get_output(0), num_output_maps=self.CHANNELS_P,
+                                                    kernel_shape=(1, 1), kernel=pc_w, bias=pc_b)
+            pc.stride    = (1, 1)
+            pc.precision = trt_type
+
+            pc_actv           = self.trt_network.add_activation(pc.get_output(0), trt.ActivationType.RELU)
+            pc_actv.precision = trt_type
+
+            p1_w = weights['p1.weight'].detach().cpu().numpy().astype(dtype)
+            p1_b = weights['p1.bias'].detach().cpu().numpy().astype(dtype)
+            p1   = self.trt_network.add_fully_connected(pc_actv.get_output(0), num_outputs=self._action_size,
+                                                        kernel=p1_w, bias=p1_b)
+            p1.precision = trt_type
+
+            p1_softmax = self.trt_network.add_softmax(p1.get_output(0))
+            p1_softmax.get_output(0).name = "POLICY"
+            p1_softmax.precision = trt_type
+
+            # value head
+            vc_w = weights['vc.weight'].detach().cpu().numpy().astype(dtype)
+            vc_b = weights['vc.bias'].detach().cpu().numpy().astype(dtype)
+            vc   = self.trt_network.add_convolution(conv4_actv.get_output(0), num_output_maps=self.CHANNELS_V,
+                                                    kernel_shape=(1,1), kernel=vc_w, bias=vc_b)
+            vc.stride    = (1, 1)
+            vc.precision = trt_type
+
+            vc_actv           = self.trt_network.add_activation(vc.get_output(0), trt.ActivationType.RELU)
+            vc_actv.precision = trt_type
+
+            v1_w = weights['v1.weight'].detach().cpu().numpy().astype(dtype)
+            v1_b = weights['v1.bias'].detach().cpu().numpy().astype(dtype)
+            v1   = self.trt_network.add_fully_connected(vc_actv.get_output(0), num_outputs=64, kernel=v1_w, bias=v1_b)
+            v1.precision = trt_type
+
+            v1_actv           = self.trt_network.add_activation(v1.get_output(0), trt.ActivationType.RELU)
+            v1_actv.precision = trt_type
+
+            v2_w = weights['v2.weight'].detach().cpu().numpy().astype(dtype)
+            v2_b = weights['v2.bias'].detach().cpu().numpy().astype(dtype)
+            v2   = self.trt_network.add_fully_connected(v1_actv.get_output(0), num_outputs=1, kernel=v2_w, bias=v2_b)
+            v2.precision = trt_type
+
+            v2_tanh = self.trt_network.add_activation(v2.get_output(0), trt.ActivationType.TANH)
+            v2_tanh.get_output(0).name = "VALUE"
+            v2_tanh.precision = trt_type
+
+            #print(p1_softmax.precision)
+            #print(v2_tanh.precision)
+            
+        elif self._args.model_arch == "resnet":
+
+            # common convolution network
+            input_conv_w = weights['resnet_input_conv.weight'].detach().cpu().numpy().astype(dtype)
+            input_conv   = self.trt_network.add_convolution(input=input_tensor, num_output_maps=self.CHANNELS,
+                                                            kernel_shape=(3, 3), kernel=input_conv_w,
+                                                            bias=trt.Weights())
+
+            input_conv.stride    = (1, 1)
+            input_conv.padding   = (1, 1)
+            input_conv.precision = trt_type
+
+            #intermediate = input_conv
+            #intermediate.get_output(0).name = "INTERMEDIATE"
+            
+            input_conv_bn_w = weights['resnet_input_bn.weight'].detach().cpu().numpy().astype(dtype)
+            input_conv_bn_b = weights['resnet_input_bn.bias'].detach().cpu().numpy().astype(dtype)
+            input_conv_bn   = self.trt_network.add_scale(input_conv.get_output(0),
+                                                         mode=trt.tensorrt.ScaleMode.CHANNEL,
+                                                         shift=input_conv_bn_b,
+                                                         scale=input_conv_bn_w,
+                                                         power=np.ones_like(input_conv_bn_w, dtype=dtype))
+            input_conv_bn.precision = trt_type
+            
+            input_conv_actv           = self.trt_network.add_activation(input_conv_bn.get_output(0), trt.ActivationType.RELU)
+            input_conv_actv.precision = trt_type
+
+            # resnet
+            res_layer = input_conv_actv
+            for i in range(1, 20):
+                name = "%02d" % i
+                res_layer = self._trt_res_layer(res_layer, weights, name=name, dtype=dtype)
+
+            # policy head
+            pc_w = weights['pc.weight'].detach().cpu().numpy().astype(dtype)
+            pc   = self.trt_network.add_convolution(res_layer.get_output(0),
+                                                    num_output_maps=self.CHANNELS_P,
+                                                    kernel_shape=(1, 1), kernel=pc_w,
+                                                    bias=trt.Weights())
+            pc.stride    = (1, 1)
+            pc.precision = trt_type
+
+            pc_bn_w = weights['pc_bn.weight'].detach().cpu().numpy().astype(dtype)
+            pc_bn_b = weights['pc_bn.bias'].detach().cpu().numpy().astype(dtype)
+            pc_bn   = self.trt_network.add_scale(pc.get_output(0),
+                                                 mode=trt.tensorrt.ScaleMode.CHANNEL,
+                                                 shift=pc_bn_b, scale=pc_bn_w,
+                                                 power=np.ones_like(pc_bn_w, dtype=dtype))
+            pc_bn.precision = trt_type
+            
+            pc_actv           = self.trt_network.add_activation(pc_bn.get_output(0), trt.ActivationType.RELU)
+            pc_actv.precision = trt_type
+
+            p1_w = weights['p1.weight'].detach().cpu().numpy().astype(dtype)
+            p1_b = weights['p1.bias'].detach().cpu().numpy().astype(dtype)
+            p1   = self.trt_network.add_fully_connected(pc_actv.get_output(0), num_outputs=self._action_size,
+                                                        kernel=p1_w, bias=p1_b)
+            p1.precision = trt_type
+
+            p1_softmax = self.trt_network.add_softmax(p1.get_output(0))
+            p1_softmax.get_output(0).name = "POLICY"
+            p1_softmax.precision = trt_type
+
+            # value head
+            vc_w = weights['vc.weight'].detach().cpu().numpy().astype(dtype)
+            vc   = self.trt_network.add_convolution(res_layer.get_output(0),
+                                                    num_output_maps=self.CHANNELS_V,
+                                                    kernel_shape=(1,1), kernel=vc_w,
+                                                    bias=trt.Weights())
+            vc.stride    = (1, 1)
+            vc.precision = trt_type
+
+            vc_bn_w = weights['vc_bn.weight'].detach().cpu().numpy().astype(dtype)
+            vc_bn_b = weights['vc_bn.bias'].detach().cpu().numpy().astype(dtype)
+            vc_bn   = self.trt_network.add_scale(vc.get_output(0),
+                                                 mode=trt.tensorrt.ScaleMode.CHANNEL,
+                                                 shift=vc_bn_b, scale=vc_bn_w,
+                                                 power=np.ones_like(vc_bn_w, dtype=dtype))
+            vc_bn.precision = trt_type
+
+            vc_actv           = self.trt_network.add_activation(vc_bn.get_output(0), trt.ActivationType.RELU)
+            vc_actv.precision = trt_type
+
+            v1_w = weights['v1.weight'].detach().cpu().numpy().astype(dtype)
+            v1_b = weights['v1.bias'].detach().cpu().numpy().astype(dtype)
+            v1   = self.trt_network.add_fully_connected(vc_actv.get_output(0), num_outputs=256, kernel=v1_w, bias=v1_b)
+            v1.precision = trt_type
+
+            #self.trt_network.mark_output(v1.get_output(0))
+            #self.trt_engine = self.trt_builder.build_cuda_engine(self.trt_network)
+            #print(self.trt_engine)
+
+            v1_actv           = self.trt_network.add_activation(v1.get_output(0), trt.ActivationType.RELU)
+            v1_actv.precision = trt_type
+
+            v2_w = weights['v2.weight'].detach().cpu().numpy().astype(dtype)
+            v2_b = weights['v2.bias'].detach().cpu().numpy().astype(dtype)
+            v2   = self.trt_network.add_fully_connected(v1_actv.get_output(0), num_outputs=1, kernel=v2_w, bias=v2_b)
+            v2.precision = trt_type
+
+            v2_tanh = self.trt_network.add_activation(v2.get_output(0), trt.ActivationType.TANH)
+            v2_tanh.get_output(0).name = "VALUE"
+            v2_tanh.precision = trt_type
+
+            #print(p1_softmax.precision)
+            #print(v2_tanh.precision)
 
         self.trt_network.mark_output(p1_softmax.get_output(0))
         self.trt_network.mark_output(v2_tanh.get_output(0))
+        #self.trt_network.mark_output(intermediate.get_output(0))
 
         self.trt_engine = self.trt_builder.build_cuda_engine(self.trt_network)
+        #print(self.trt_engine)
         #print(self.trt_engine.get_binding_shape(0))
         #print(self.trt_engine.get_binding_shape(1))
         #print(self.trt_engine.get_binding_shape(2))
@@ -816,24 +1115,31 @@ class Model(nn.Module):
         h_game_input    = game.state_normalized().astype(np.dtype(self._args.play_dtype))
         h_policy_output = np.empty(game.action_size(), dtype = np.dtype(self._args.play_dtype))
         h_value_output  = np.empty(1, dtype = np.dtype(self._args.play_dtype))
+        #h_intermediate_output  = np.empty(self.CHANNELS*self._size_x*self._size_y, dtype = np.dtype(self._args.play_dtype))
         #print(h_game_input.nbytes, h_policy_output.nbytes, h_value_output.nbytes)
 
         self.trt_d_game_input    = cuda.mem_alloc(h_game_input.nbytes)
         self.trt_d_policy_output = cuda.mem_alloc(h_policy_output.nbytes)
         self.trt_d_value_output  = cuda.mem_alloc(h_value_output.nbytes)
+        #self.trt_d_intermediate_output  = cuda.mem_alloc(h_intermediate_output.nbytes)
         
         print("Loaded TENSORRT Engine [%s] [%s, %s, %s] [%d, %d, %d]" % (trt_type,
+        #print("Loaded TENSORRT Engine [%s] [%s, %s, %s, %s] [%d, %d, %d, %d]" % (trt_type,
                                                                          self.trt_engine.get_binding_shape(0), 
                                                                          self.trt_engine.get_binding_shape(1),
                                                                          self.trt_engine.get_binding_shape(2),
+                                                                         #self.trt_engine.get_binding_shape(3),
                                                                          h_game_input.nbytes,
                                                                          h_policy_output.nbytes,
                                                                          h_value_output.nbytes))
+                                                                         #h_value_output.nbytes,
+                                                                         #h_intermediate_output.nbytes))
 
         if self._args.model_tensorrt == 2:
-            self.conv1  = None
-            self.conv2  = None
-            self.conv3  = None
+            #self.conv1  = None
+            #self.conv2  = None
+            #self.conv3  = None
+            #self.conv4  = None
 
             # policy head
             self.pc     = None
@@ -902,9 +1208,11 @@ def test_model():
     print("-"*30)
     print("INFERENCE WITH ORIGINAL MODEL")
     
+    #policy, value, intermediate = model.game_predict(game.state_normalized())
     policy, value = model.game_predict(game.state_normalized())
     print(policy)
     print(value)
+    #print(intermediate)
     
     print("-"*30)
     print("INFERENCE WITH TENSORRT")
@@ -915,10 +1223,14 @@ def test_model():
     #print(engine)
 
     model.build_trt_engine(model.state_dict(), dtype=np.dtype(args.play_dtype))
+    #policy_output, value_output, intermediate_output = model.game_predict_trt(game.state_normalized())
     policy_output, value_output = model.game_predict_trt(game.state_normalized())
+    
+    #intermediate_output = np.reshape(intermediate_output, (model.CHANNELS, model._size_x, model._size_y))
 
     print(policy_output)
     print(value_output)
+    #print(intermediate_output)
 
     #inputs, outputs, bindings, stream = model.allocate_buffers(engine)
     #with engine.create_execution_context() as context:
