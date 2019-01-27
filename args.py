@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--model_ppo2',          type=int,   default=0,           help='model using ppo2 (default 0)')
     parser.add_argument('--model_ppo2_clip',     type=float, default=0.2,         help='model ppo2 clip value (default 0.2)')
     parser.add_argument('--model_coef_value',    type=float, default=1.0,         help='coeffiency for value loss (default 1.0)')
-    parser.add_argument('--model_coef_entropy',  type=float, default=0.05,        help='coeffiency for entropy (default 0.05)')
+    parser.add_argument('--model_coef_entropy',  type=float, default=0.1,         help='coeffiency for entropy (default 0.1)')
     parser.add_argument('--model_tensorrt',      type=int,   default=0,           help='model use tensorrt (default 0)')
     parser.add_argument('--model_precision',     type=str,   default='float',     help='model precision (default float)')
     parser.add_argument('--model_channels',      type=int,   default=32,          help='resnet channels (default: 32)')

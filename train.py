@@ -28,14 +28,28 @@ async def train(args, memory):
             curr_game_count = memory.get_game_count()
             curr_experiences = memory.get_memory_experiences()
 
-            if curr_game_count >= (last_trained_game + args.train_game_count) and len(curr_experiences) >= args.model_batch_size:
+            #if curr_experiences is None:
+            #    await asyncio.sleep(1)
+            #    continue
+
+            experiences_1 = curr_experiences[:int(len(curr_experiences)/4)]
+            experiences_2 = curr_experiences[int(len(curr_experiences)/4):int(len(curr_experiences)*2/4)]
+            experiences_3 = curr_experiences[int(len(curr_experiences)*2/4):int(len(curr_experiences)*3/4)]
+            experiences_4 = curr_experiences[int(len(curr_experiences)*3/4):]
+            combined_experiences = experiences_4 \
+                                    + random.sample(experiences_3, int(len(curr_experiences)/8)) \
+                                    + random.sample(experiences_2, int(len(curr_experiences)/16)) \
+                                    + random.sample(experiences_1, int(len(curr_experiences)/32))
+
+            if curr_game_count >= (last_trained_game + args.train_game_count) \
+                and len(combined_experiences) >= args.model_batch_size:
 
                 train_start_time = datetime.now()
 
                 print("#"*30 + (" Training Game # %d " % curr_game_count) + "#"*30)
                 print("Start Training : [Last Trained %d, Curr %d]" % (last_trained_game, curr_game_count))
-                
-                batch_experiences = random.sample(curr_experiences, args.model_batch_size)
+
+                batch_experiences = random.sample(combined_experiences, args.model_batch_size)
                 memory.get_model().game_train(batch_experiences)
                 
                 memory.add_experience_trained(len(batch_experiences) * args.model_epochs,
