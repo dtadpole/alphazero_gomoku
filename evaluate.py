@@ -128,6 +128,9 @@ def get_move_from_user(game):
     
 async def evaluate(args):
 
+    #args.mcts_noise = 0.0
+    #args.mcts_alpha = 1.0
+    
     players = {
         "p1" : {
             "type": args.eval_model_1,

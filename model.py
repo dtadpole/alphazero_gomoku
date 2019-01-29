@@ -2,6 +2,7 @@
 
 import io
 import os
+import copy
 import base64
 import numpy as np
 import torch
@@ -617,6 +618,7 @@ class Model(nn.Module):
             'lr_multiplier' : self.lr_multiplier
         }, filepath)
 
+        sa
     def load_model(self, filepath='model/model.data'):
         if os.path.isfile(filepath):
             try:
@@ -667,6 +669,25 @@ class Model(nn.Module):
         return h_policy_output, h_value_output
         
 
+    def _get_bn_weights(self, weights, suffix, dtype='float32'):
+        
+        x_bn_w = weights[suffix+'.weight'].detach().cpu().numpy().astype(dtype)
+        x_bn_b = weights[suffix+'.bias'].detach().cpu().numpy().astype(dtype)
+
+        x_bn_m = weights[suffix+'.running_mean'].detach().cpu().numpy().astype(dtype)
+        x_bn_v = weights[suffix+'.running_var'].detach().cpu().numpy().astype(dtype)
+        
+        #print('-'*30)
+        #print(x_bn_w)
+        #print(x_bn_b)
+        #print(x_bn_m)
+        #print(x_bn_v)
+
+        #x_bn_w =  1.0 / np.sqrt(x_bn_v + 1e-5)
+        #x_bn_b =  - x_bn_m * x_bn_w
+        
+        return x_bn_w, x_bn_b
+
 
     def _trt_res_layer(self, input_layer, weights, name="01", dtype=np.float32):
     
@@ -695,12 +716,10 @@ class Model(nn.Module):
         conv_x_a.padding   = (1, 1)
         conv_x_a.precision = trt_type
 
-        conv_x_a_bn_w = weights['resnet_'+name+'a_bn.weight'].detach().cpu().numpy().astype(dtype)
-        conv_x_a_bn_b = weights['resnet_'+name+'a_bn.bias'].detach().cpu().numpy().astype(dtype)
+        conv_x_a_bn_w, conv_x_a_bn_b = self._get_bn_weights(weights, 'resnet_'+name+'a_bn', dtype=dtype)
         conv_x_a_bn   = self.trt_network.add_scale(conv_x_a.get_output(0),
                                                    mode=trt.tensorrt.ScaleMode.CHANNEL,
-                                                   shift=conv_x_a_bn_b, scale=conv_x_a_bn_w,
-                                                   power=np.ones_like(conv_x_a_bn_w, dtype=dtype))
+                                                   shift=conv_x_a_bn_b, scale=conv_x_a_bn_w)
         conv_x_a_bn.precision = trt_type
 
         conv_x_a_actv           = self.trt_network.add_activation(conv_x_a_bn.get_output(0), trt.ActivationType.RELU)
@@ -716,19 +735,19 @@ class Model(nn.Module):
         conv_x_b.padding   = (1, 1)
         conv_x_b.precision = trt_type
 
-        conv_x_b_bn_w = weights['resnet_'+name+'b_bn.weight'].detach().cpu().numpy().astype(dtype)
-        conv_x_b_bn_b = weights['resnet_'+name+'b_bn.bias'].detach().cpu().numpy().astype(dtype)
+        conv_x_b_bn_w, conv_x_b_bn_b = self._get_bn_weights(weights, 'resnet_'+name+'b_bn', dtype=dtype)
         conv_x_b_bn   = self.trt_network.add_scale(conv_x_b.get_output(0),
                                                    mode=trt.tensorrt.ScaleMode.CHANNEL,
-                                                   shift=conv_x_b_bn_b, scale=conv_x_b_bn_w,
-                                                   power=np.ones_like(conv_x_b_bn_w, dtype=dtype))
+                                                   shift=conv_x_b_bn_b, scale=conv_x_b_bn_w)
         conv_x_b_bn.precision = trt_type
 
+        # addition of input
         conv_x_b_res  = self.trt_network.add_elementwise(conv_x_b_bn.get_output(0),
                                                          input_layer.get_output(0),
                                                          trt.tensorrt.ElementWiseOperation.SUM)
         conv_x_b_res.precision = trt_type
 
+        # final activation
         conv_x_b_actv = self.trt_network.add_activation(conv_x_b_res.get_output(0), trt.ActivationType.RELU)
         conv_x_b_actv.precision = trt_type
 
@@ -992,21 +1011,18 @@ class Model(nn.Module):
             input_conv   = self.trt_network.add_convolution(input=input_tensor, num_output_maps=self.CHANNELS,
                                                             kernel_shape=(3, 3), kernel=input_conv_w,
                                                             bias=trt.Weights())
-
             input_conv.stride    = (1, 1)
             input_conv.padding   = (1, 1)
             input_conv.precision = trt_type
 
             #intermediate = input_conv
             #intermediate.get_output(0).name = "INTERMEDIATE"
-            
-            input_conv_bn_w = weights['resnet_input_bn.weight'].detach().cpu().numpy().astype(dtype)
-            input_conv_bn_b = weights['resnet_input_bn.bias'].detach().cpu().numpy().astype(dtype)
+
+            input_conv_bn_w, input_conv_bn_b = self._get_bn_weights(weights, 'resnet_input_bn', dtype=dtype)
             input_conv_bn   = self.trt_network.add_scale(input_conv.get_output(0),
                                                          mode=trt.tensorrt.ScaleMode.CHANNEL,
                                                          shift=input_conv_bn_b,
-                                                         scale=input_conv_bn_w,
-                                                         power=np.ones_like(input_conv_bn_w, dtype=dtype))
+                                                         scale=input_conv_bn_w)
             input_conv_bn.precision = trt_type
             
             input_conv_actv           = self.trt_network.add_activation(input_conv_bn.get_output(0), trt.ActivationType.RELU)
@@ -1027,12 +1043,10 @@ class Model(nn.Module):
             pc.stride    = (1, 1)
             pc.precision = trt_type
 
-            pc_bn_w = weights['pc_bn.weight'].detach().cpu().numpy().astype(dtype)
-            pc_bn_b = weights['pc_bn.bias'].detach().cpu().numpy().astype(dtype)
+            pc_bn_w, pc_bn_b = self._get_bn_weights(weights, 'pc_bn', dtype=dtype)
             pc_bn   = self.trt_network.add_scale(pc.get_output(0),
                                                  mode=trt.tensorrt.ScaleMode.CHANNEL,
-                                                 shift=pc_bn_b, scale=pc_bn_w,
-                                                 power=np.ones_like(pc_bn_w, dtype=dtype))
+                                                 shift=pc_bn_b, scale=pc_bn_w)
             pc_bn.precision = trt_type
             
             pc_actv           = self.trt_network.add_activation(pc_bn.get_output(0), trt.ActivationType.RELU)
@@ -1057,12 +1071,10 @@ class Model(nn.Module):
             vc.stride    = (1, 1)
             vc.precision = trt_type
 
-            vc_bn_w = weights['vc_bn.weight'].detach().cpu().numpy().astype(dtype)
-            vc_bn_b = weights['vc_bn.bias'].detach().cpu().numpy().astype(dtype)
+            vc_bn_w, vc_bn_b = self._get_bn_weights(weights, 'vc_bn', dtype=dtype)
             vc_bn   = self.trt_network.add_scale(vc.get_output(0),
                                                  mode=trt.tensorrt.ScaleMode.CHANNEL,
-                                                 shift=vc_bn_b, scale=vc_bn_w,
-                                                 power=np.ones_like(vc_bn_w, dtype=dtype))
+                                                 shift=vc_bn_b, scale=vc_bn_w)
             vc_bn.precision = trt_type
 
             vc_actv           = self.trt_network.add_activation(vc_bn.get_output(0), trt.ActivationType.RELU)
@@ -1184,6 +1196,7 @@ def test_model():
     print("##### Total Parameters : [%d, %d] #####" % (model_size, total_size))
     
     #print(model.state_dict())
+    print(model.state_dict().keys())
     
     print("CONVERT TO BASE64")
     base64_model = model.to_base64()
@@ -1207,7 +1220,7 @@ def test_model():
 
     print("-"*30)
     print("INFERENCE WITH ORIGINAL MODEL")
-    
+
     #policy, value, intermediate = model.game_predict(game.state_normalized())
     policy, value = model.game_predict(game.state_normalized())
     print(policy)
@@ -1222,7 +1235,9 @@ def test_model():
     #engine = backend.prepare(onnx_inf_model, device='CUDA:'+str(args.model_cuda))
     #print(engine)
 
-    model.build_trt_engine(model.state_dict(), dtype=np.dtype(args.play_dtype))
+    state_dict_copy = copy.deepcopy(model.state_dict())
+    
+    model.build_trt_engine(state_dict_copy, dtype=np.dtype(args.play_dtype))
     #policy_output, value_output, intermediate_output = model.game_predict_trt(game.state_normalized())
     policy_output, value_output = model.game_predict_trt(game.state_normalized())
     
@@ -1250,9 +1265,9 @@ def test_model():
     print("timeit [pytorch] : %s ms  [%d] [total %s s]" % (round((t/args.timeit_count)*1000,2), args.timeit_count, round(t,2)))
 
     # timeit
-    game = Game(args)
-    model = Model(game.state_shape(), game.action_size(), args)
-    model.build_trt_engine(model.state_dict(), dtype=np.dtype(args.play_dtype))
+    #game = Game(args)
+    #model = Model(game.state_shape(), game.action_size(), args)
+    model.build_trt_engine(state_dict_copy, dtype=np.dtype(args.play_dtype))
     
     t = timeit.timeit("model.game_predict_trt(game.state_normalized())", globals=globals(), number=args.timeit_count)
     print("timeit [tensorrt] : %s ms  [%d] [total %s s]" % (round((t/args.timeit_count)*1000,2), args.timeit_count, round(t,2)))
