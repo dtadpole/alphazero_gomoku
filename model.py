@@ -618,7 +618,7 @@ class Model(nn.Module):
             'lr_multiplier' : self.lr_multiplier
         }, filepath)
 
-        sa
+
     def load_model(self, filepath='model/model.data'):
         if os.path.isfile(filepath):
             try:
