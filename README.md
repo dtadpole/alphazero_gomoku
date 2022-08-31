@@ -33,12 +33,12 @@ To train model with distributed processes (1 training server, multiple inference
 Trained models are stored in the following directory by default:
 
 <code>./save_<model_arch>_<q_type>_<state_type>_<channels>_<game_size>/</code>
-  
+
 ---
 
 To evaluate training model or play with human:
 
-<code>python evaluate.py --mcts_model_1 (best|curr|human) --mcts_model_2 (best|curr|human)</code>
+<code>python evaluate.py --eval_model_1 (best|curr|human) --eval_model_2 (best|curr|human)</code>
 
 ---
 
@@ -46,4 +46,4 @@ To show a list of options:
 
 <code>python args.py --help</code>
 
----  
+---

@@ -17,10 +17,10 @@ from memory import Memory
 
 
 async def get_model(args):
-    
+
     game = Game(args)
     model = Model(game.state_shape(), game.action_size(), args)
-    
+
     model_url = "http://" + args.memory_server + ":" + args.memory_port + "/model"
     async with aiohttp.ClientSession() as session:
         async with session.get(model_url) as response:
@@ -31,7 +31,7 @@ async def get_model(args):
 
 
 async def post_experiences(args, game_experiences, game_score):
-    
+
     print("Posting Experiences ...")
     experiences_url = "http://" + args.memory_server + ":" + args.memory_port + "/experiences"
     async with aiohttp.ClientSession() as session:
@@ -44,16 +44,16 @@ async def post_experiences(args, game_experiences, game_score):
             print("Post Experiences [%s]" % response_text)
             return
 
-        
+
 # record local game count
 local_game_count = 1
-        
+
 async def play(args, memory=None, sleep=None):
 
     global local_game_count
-    
+
     model = None
-    
+
     while True:
 
         try:
@@ -74,7 +74,7 @@ async def play(args, memory=None, sleep=None):
                 model.build_trt_engine(model.state_dict(), np.dtype(args.play_dtype))
                 print("Loaded %s" % model)
                 #print("here1")
-                
+
             game = Game(args)
             mcts = MCTS(model, args)
 
@@ -84,6 +84,11 @@ async def play(args, memory=None, sleep=None):
             game_experiences = await mcts.self_play(game, sleep)
             play_end_time = datetime.now()
             print("Game Score [%s], Play Duration: %s" % (game.game_score(), (play_end_time - play_start_time)))
+
+            cont = input("Continue? [Y/n] : ")
+            cont = cont.upper().strip()
+            if len(cont) > 0 and cont[0] != "Y":
+                exit(0)
 
             local_game_count += 1
 
@@ -96,17 +101,17 @@ async def play(args, memory=None, sleep=None):
                 print("Skip Post Experience.")
 
         except Exception as e:
-            
+
             model = None
 
             print(e)
-            
+
             traceback.print_exc()
-            
+
             await asyncio.sleep(1)
-            
+
         finally:
-            
+
             await AsyncNone()
 
 
@@ -114,8 +119,7 @@ async def play(args, memory=None, sleep=None):
 if __name__ == "__main__":
 
     args = parse_args()
-    
-    play_task = asyncio.ensure_future(play(args))
-    
-    asyncio.get_event_loop().run_forever()
 
+    play_task = asyncio.ensure_future(play(args))
+
+    asyncio.get_event_loop().run_forever()
