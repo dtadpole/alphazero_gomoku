@@ -85,10 +85,11 @@ async def play(args, memory=None, sleep=None):
             play_end_time = datetime.now()
             print("Game Score [%s], Play Duration: %s" % (game.game_score(), (play_end_time - play_start_time)))
 
-            cont = input("Continue? [Y/n] : ")
-            cont = cont.upper().strip()
-            if len(cont) > 0 and cont[0] != "Y":
+            response = input("Continue? [Y/n] ")
+            response = response.upper().strip()
+            if len(response) > 0 and response[0] != "Y":
                 asyncio.get_event_loop().stop()
+                #sys.exit()
 
             local_game_count += 1
 

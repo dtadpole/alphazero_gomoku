@@ -228,7 +228,7 @@ async def evaluate(args):
 
             response = input("Continue? [Y/n] ")
             response = response.upper().strip()
-            if response > 0 and response[0] != "Y":
+            if len(response) > 0 and response[0] != "Y":
                 asyncio.get_event_loop().stop()
                 #sys.exit()
 
