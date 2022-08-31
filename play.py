@@ -88,7 +88,7 @@ async def play(args, memory=None, sleep=None):
             cont = input("Continue? [Y/n] : ")
             cont = cont.upper().strip()
             if len(cont) > 0 and cont[0] != "Y":
-                exit(0)
+                asyncio.get_event_loop().stop()
 
             local_game_count += 1
 
