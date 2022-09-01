@@ -26,11 +26,11 @@ class Model(nn.Module):
     def __init__(self, state_shape, action_size, args):
 
         super(Model, self).__init__()
-        
+
         self.CHANNELS    = args.model_channels
         self.CHANNELS_P  = int(args.model_channels/2)
         self.CHANNELS_V  = int(args.model_channels/4)
-        
+
         self._state_layer, self._size_x, self._size_y  = state_shape
         self._action_size                              = action_size
         self._args                                     = args
@@ -46,15 +46,15 @@ class Model(nn.Module):
 
         if args.model_tensorrt != 2:
             self.build_network(args)
-    
+
             if args.model_tensorrt:
                 self.build_trt_engine(self.state_dict(), dtype=np.dtype(self._args.play_dtype))
 
 
     def build_network(self, args):
-    
+
         if args.model_arch == 'resnet':
-            
+
             # resnet
             self.resnet_input_conv = nn.Conv2d(self._state_layer, self.CHANNELS, kernel_size=3, stride=1, padding=1, bias=False)
             self.resnet_input_bn   = nn.BatchNorm2d(self.CHANNELS)
@@ -182,7 +182,7 @@ class Model(nn.Module):
             self.vc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_V, kernel_size=1, stride=1)
             self.v1     = nn.Linear(self.CHANNELS_V*(self._size_x)*(self._size_y), 64)
             self.v2     = nn.Linear(64, 1)
-            
+
         elif args.model_arch == 'conv3':
 
             self.conv1  = nn.Conv2d(self._state_layer, self.CHANNELS, kernel_size=3, stride=1, padding=1)
@@ -198,9 +198,9 @@ class Model(nn.Module):
             self.vc     = nn.Conv2d(self.CHANNELS*4, self.CHANNELS_V, kernel_size=1, stride=1)
             self.v1     = nn.Linear(self.CHANNELS_V*(self._size_x)*(self._size_y), 64)
             self.v2     = nn.Linear(64, 1)
-            
+
         else:
-            
+
             raise Exception("unknown model arch : %s" % args.model_arch)
 
 
@@ -218,17 +218,17 @@ class Model(nn.Module):
                 self.model_double()
             else:
                 self.model_float()
-            
 
-            
+
+
     def forward(self, s):
-        
+
         #intermediate = s
-        
+
         if self._args.model_arch == 'resnet':
 
             s = self.resnet_input_conv(s)
-            
+
             #intermediate = s
 
             s = F.relu(self.resnet_input_bn(s))
@@ -346,7 +346,7 @@ class Model(nn.Module):
             value  = torch.tanh(value)                                               # tanh
 
         elif self._args.model_arch == 'conv3':
-            
+
             s = s.view(-1, self._state_layer, self._size_x, self._size_y)             # batch_size x num_channels x s_x x s_y
             s = F.relu(self.conv1(s))                                                # batch_size x num_channels x s_x x s_y
             s = F.relu(self.conv2(s))                                                # batch_size x num_channels x s_x x s_y
@@ -366,28 +366,28 @@ class Model(nn.Module):
             value  = torch.tanh(value)                                               # tanh
 
         else:
-            
+
             raise Exception("unknown model arch : %s" % args.model_arch)
-            
+
         return policy, value
         #return policy, value, intermediate
-    
 
-    
+
+
     def model_half(self):
         self._dtype = np.float16
         self.half()  # convert to half precision
         for layer in self.modules():
           #if isinstance(layer, nn.BatchNorm2d):
             layer.half()
-    
+
     def model_float(self):
         self._dtype = np.float32
         self.float()  # convert to float precision
         for layer in self.modules():
           #if isinstance(layer, nn.BatchNorm2d):
             layer.float()
-    
+
     def model_double(self):
         self._dtype = np.float64
         self.double()  # convert to double precision
@@ -445,7 +445,7 @@ class Model(nn.Module):
 
         prev_policy, prev_value = self(boards)
         #entropy_prev = -torch.mean(torch.sum(prev_policy * torch.exp(prev_policy), 1))
-        
+
         entropy_list = [-np.sum(list(filter(lambda v:v>0, k)) * np.log(list(filter(lambda v:v>0, k)))) for k in pis]
         entropy_mcts = np.mean(entropy_list)
 
@@ -467,7 +467,7 @@ class Model(nn.Module):
                 #print(policy_nlogp)
                 #print(old_nlogp)
                 #print(old_advs)
-                
+
                 pi_loss = self.loss_pi(target_pis, curr_policy)
 
                 pg_loss1 = old_advs * ratio
@@ -484,7 +484,7 @@ class Model(nn.Module):
                                                       -self._args.model_ppo2_clip,
                                                       self._args.model_ppo2_clip)
                 #print("vpred_clipped", vpred_clipped.shape)
-                
+
                 vf_loss1 = (torch.squeeze(curr_value) - target_vs) ** 2
                 vf_loss2 = (torch.squeeze(vpred_clipped) - target_vs) ** 2
                 #print("vf_loss1", vf_loss1.shape)
@@ -492,13 +492,13 @@ class Model(nn.Module):
 
                 vf_loss = .5 * torch.mean(torch.max(vf_loss1, vf_loss2))
                 #print("vf_loss", vf_loss.shape)
-                
+
                 total_loss = pg_loss + vf_loss * self._args.model_coef_value - entropy_curr * self._args.model_coef_entropy
 
                 #print("pg_loss %.3f, vf_loss %.3f, entropy %.3f" % (pg_loss.detach().cpu().numpy(),
                 #                                                    vf_loss.detach().cpu().numpy(),
                 #                                                    entropy_curr.detach().cpu().numpy()))
-                
+
             else:
                 pi_loss = self.loss_pi(target_pis, curr_policy)
                 pg_loss = 0
@@ -521,7 +521,7 @@ class Model(nn.Module):
             # calculate policy entropy
             #entropy_curr = -torch.mean(torch.sum(curr_policy * torch.exp(curr_policy), 1))
             entropy_new = -torch.mean(torch.sum(new_policy * torch.exp(new_policy), 1))
-            
+
             #print(prev_policy)
             #print(new_policy)
             kl_list = np.sum(np.exp(prev_policy.data.cpu().numpy()) * (prev_policy.data.cpu().numpy() - new_policy.data.cpu().numpy()), axis=1)
@@ -552,7 +552,7 @@ class Model(nn.Module):
             boards = torch.DoubleTensor(board)
         else:
             boards = torch.FloatTensor(board)
-            
+
         if self._args.model_cuda >= 0 and self._args.model_tensorrt != 2:
             boards = boards.contiguous().cuda(device=self._device)
         boards = boards.view(-1, self._state_layer, self._size_x, self._size_y)
@@ -589,13 +589,13 @@ class Model(nn.Module):
             #'lr_multiplier' : self.lr_multiplier
         }, buffer)
         return base64.b64encode(buffer.getvalue()).decode('utf-8')
-    
+
     def from_base64(self, base64_model):
-        
+
         buffer = io.BytesIO(base64.b64decode(base64_model))
         map_location = None if (self._args.model_cuda >= 0 and self._args.model_tensorrt != 2) else 'cpu'
         checkpoint = torch.load(buffer, map_location=map_location)
-        
+
         model = Model((self._state_layer, self._size_x, self._size_y), self._action_size, self._args)
         if self._args.model_tensorrt != 2:
             model.load_state_dict(checkpoint['state_dict'])
@@ -604,8 +604,8 @@ class Model(nn.Module):
         else:
             model.build_trt_engine(checkpoint['state_dict'], dtype=np.dtype(self._args.play_dtype))
             return model
-            
-    
+
+
     def save_model(self, filepath='model/model.data'):
         # rename file if exist
         if os.path.isfile(filepath+'.bak'):
@@ -633,25 +633,25 @@ class Model(nn.Module):
         else:
             return None
 
-        
+
     def game_predict_trt(self, board):
-        
+
         h_game_input    = board.astype(np.dtype(self._args.play_dtype))
         h_policy_output = np.empty(self._action_size, dtype = np.dtype(self._args.play_dtype))
         h_value_output  = np.empty(1, dtype = np.dtype(self._args.play_dtype))
         #h_intermediate_output = np.empty(self.CHANNELS * self._size_x * self._size_y, dtype = np.dtype(self._args.play_dtype))
 
         #print(h_game_input.nbytes, h_policy_output.nbytes, h_value_output.nbytes)
-        
+
         #d_game_input    = cuda.mem_alloc(h_game_input.nbytes)
         #d_policy_output = cuda.mem_alloc(h_policy_output.nbytes)
         #d_value_output  = cuda.mem_alloc(h_value_output.nbytes)
-        
+
         #stream = cuda.Stream()
 
         cuda.memcpy_htod_async(self.trt_d_game_input, h_game_input, self.trt_stream)
 
-        self.trt_context.execute_async(bindings=[int(self.trt_d_game_input), 
+        self.trt_context.execute_async(bindings=[int(self.trt_d_game_input),
                                                  int(self.trt_d_policy_output),
                                                  int(self.trt_d_value_output)],
                                                  #int(self.trt_d_value_output),
@@ -667,16 +667,16 @@ class Model(nn.Module):
 
         #return h_policy_output, h_value_output, h_intermediate_output
         return h_policy_output, h_value_output
-        
+
 
     def _get_bn_weights(self, weights, suffix, dtype='float32'):
-        
+
         x_bn_w = weights[suffix+'.weight'].detach().cpu().numpy().astype(dtype)
         x_bn_b = weights[suffix+'.bias'].detach().cpu().numpy().astype(dtype)
 
         x_bn_m = weights[suffix+'.running_mean'].detach().cpu().numpy().astype(dtype)
         x_bn_v = weights[suffix+'.running_var'].detach().cpu().numpy().astype(dtype)
-        
+
         #print('-'*30)
         #print(x_bn_w)
         #print(x_bn_b)
@@ -685,12 +685,12 @@ class Model(nn.Module):
 
         #x_bn_w =  1.0 / np.sqrt(x_bn_v + 1e-5)
         #x_bn_b =  - x_bn_m * x_bn_w
-        
+
         return x_bn_w, x_bn_b
 
 
     def _trt_res_layer(self, input_layer, weights, name="01", dtype=np.float32):
-    
+
         if dtype == np.dtype('float32'):
             trt_type = trt.float32
             #print('float32')
@@ -705,7 +705,7 @@ class Model(nn.Module):
             #print('int8')
         else:
             raise Exception("Unknown data type [%s]" % dtype)
-            
+
         # conv x_a
         conv_x_a_w = weights['resnet_'+name+'a_conv.weight'].detach().cpu().numpy().astype(dtype)
         conv_x_a   = self.trt_network.add_convolution(input_layer.get_output(0),
@@ -752,10 +752,10 @@ class Model(nn.Module):
         conv_x_b_actv.precision = trt_type
 
         return conv_x_b_actv
-    
+
 
     def build_trt_engine(self, state_dict, dtype=np.float32):
-        
+
         if self._args.model_arch != "conv3" and self._args.model_arch != "conv4" and self._args.model_arch != "resnet":
             raise Exception("Unsupport model arch [%s]" % self._args.model_arch)
 
@@ -773,24 +773,24 @@ class Model(nn.Module):
             #print('int8')
         else:
             raise Exception("Unknown data type [%s]" % dtype)
-            
+
         #print(trt_type, trt.nptype(trt_type))
-        
+
         self.TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         self.trt_runtime = trt.Runtime(self.TRT_LOGGER)
         #print(self.trt_runtime)
 
         self.trt_builder = trt.Builder(self.TRT_LOGGER)
         self.trt_builder.max_batch_size = 1
-        self.trt_builder.max_workspace_size = 2**20
+        # self.trt_builder.max_workspace_size = 2**20
         if dtype == np.dtype('float16'):
             self.trt_builder.fp16_mode = True
         #self.trt_builder.strict_type_constraints = True
-        
+
         self.trt_network = self.trt_builder.create_network()
 
         # Configure the network layers based on the weights provided.
-        # In this case, the weights are imported from a pytorch model. 
+        # In this case, the weights are imported from a pytorch model.
         # Add an input layer. The name is a string, dtype is a TensorRT dtype,
         # and the shape can be provided as either a list or tuple.
         input_tensor = self.trt_network.add_input(name="INPUT", dtype=trt_type,
@@ -801,7 +801,7 @@ class Model(nn.Module):
         weights = state_dict
 
         if self._args.model_arch == "conv3":
-            
+
             # common convolution network
             conv1_w = weights['conv1.weight'].detach().cpu().numpy().astype(dtype)
             conv1_b = weights['conv1.bias'].detach().cpu().numpy().astype(dtype)
@@ -813,7 +813,7 @@ class Model(nn.Module):
 
             #intermediate = conv1
             #intermediate.get_output(0).name = "INTERMEDIATE"
-            
+
             conv1_actv           = self.trt_network.add_activation(conv1.get_output(0), trt.ActivationType.RELU)
             conv1_actv.precision = trt_type
 
@@ -901,9 +901,9 @@ class Model(nn.Module):
 
             #print(p1_softmax.precision)
             #print(v2_tanh.precision)
-            
+
         if self._args.model_arch == "conv4":
-            
+
             # common convolution network
             conv1_w = weights['conv1.weight'].detach().cpu().numpy().astype(dtype)
             conv1_b = weights['conv1.bias'].detach().cpu().numpy().astype(dtype)
@@ -915,7 +915,7 @@ class Model(nn.Module):
 
             #intermediate = conv1
             #intermediate.get_output(0).name = "INTERMEDIATE"
-            
+
             conv1_actv           = self.trt_network.add_activation(conv1.get_output(0), trt.ActivationType.RELU)
             conv1_actv.precision = trt_type
 
@@ -1003,7 +1003,7 @@ class Model(nn.Module):
 
             #print(p1_softmax.precision)
             #print(v2_tanh.precision)
-            
+
         elif self._args.model_arch == "resnet":
 
             # common convolution network
@@ -1024,7 +1024,7 @@ class Model(nn.Module):
                                                          shift=input_conv_bn_b,
                                                          scale=input_conv_bn_w)
             input_conv_bn.precision = trt_type
-            
+
             input_conv_actv           = self.trt_network.add_activation(input_conv_bn.get_output(0), trt.ActivationType.RELU)
             input_conv_actv.precision = trt_type
 
@@ -1048,7 +1048,7 @@ class Model(nn.Module):
                                                  mode=trt.tensorrt.ScaleMode.CHANNEL,
                                                  shift=pc_bn_b, scale=pc_bn_w)
             pc_bn.precision = trt_type
-            
+
             pc_actv           = self.trt_network.add_activation(pc_bn.get_output(0), trt.ActivationType.RELU)
             pc_actv.precision = trt_type
 
@@ -1116,7 +1116,7 @@ class Model(nn.Module):
 
         self.trt_context = self.trt_engine.create_execution_context()
         #print(self.trt_context)
-            
+
         # Create a stream in which to copy inputs/outputs and run inference.
         # Allocate device memory for inputs and outputs.
         self.trt_stream = cuda.Stream()
@@ -1134,10 +1134,10 @@ class Model(nn.Module):
         self.trt_d_policy_output = cuda.mem_alloc(h_policy_output.nbytes)
         self.trt_d_value_output  = cuda.mem_alloc(h_value_output.nbytes)
         #self.trt_d_intermediate_output  = cuda.mem_alloc(h_intermediate_output.nbytes)
-        
+
         print("Loaded TENSORRT Engine [%s] [%s, %s, %s] [%d, %d, %d]" % (trt_type,
         #print("Loaded TENSORRT Engine [%s] [%s, %s, %s, %s] [%d, %d, %d, %d]" % (trt_type,
-                                                                         self.trt_engine.get_binding_shape(0), 
+                                                                         self.trt_engine.get_binding_shape(0),
                                                                          self.trt_engine.get_binding_shape(1),
                                                                          self.trt_engine.get_binding_shape(2),
                                                                          #self.trt_engine.get_binding_shape(3),
@@ -1161,19 +1161,19 @@ class Model(nn.Module):
             self.vc     = None
             self.v1     = None
             self.v2     = None
-            
+
             torch.cuda.empty_cache()
 
             print("Cleaned ORIGINAL Model")
-            
 
-            
-            
+
+
+
 model = None
 game = None
 
 def test_model():
-    
+
     global model, game
 
     args = parse_args()
@@ -1194,10 +1194,10 @@ def test_model():
             total_size += layer_size
             print(name, layer_shape, layer_size)
     print("##### Total Parameters : [%d, %d] #####" % (model_size, total_size))
-    
+
     #print(model.state_dict())
     print(model.state_dict().keys())
-    
+
     print("CONVERT TO BASE64")
     base64_model = model.to_base64()
     #print(base64_model)
@@ -1226,7 +1226,7 @@ def test_model():
     print(policy)
     print(value)
     #print(intermediate)
-    
+
     print("-"*30)
     print("INFERENCE WITH TENSORRT")
     #onnx_inf_model = onnx.load("model.onnx")
@@ -1236,11 +1236,11 @@ def test_model():
     #print(engine)
 
     state_dict_copy = copy.deepcopy(model.state_dict())
-    
+
     model.build_trt_engine(state_dict_copy, dtype=np.dtype(args.play_dtype))
     #policy_output, value_output, intermediate_output = model.game_predict_trt(game.state_normalized())
     policy_output, value_output = model.game_predict_trt(game.state_normalized())
-    
+
     #intermediate_output = np.reshape(intermediate_output, (model.CHANNELS, model._size_x, model._size_y))
 
     print(policy_output)
@@ -1255,12 +1255,12 @@ def test_model():
         #print("Prediction: " + str(output))
 
 
-        
- 
+
+
     # timeit
     game = Game(args)
     model = Model(game.state_shape(), game.action_size(), args)
-    
+
     t = timeit.timeit("model.game_predict(game.state_normalized())", globals=globals(), number=args.timeit_count)
     print("timeit [pytorch] : %s ms  [%d] [total %s s]" % (round((t/args.timeit_count)*1000,2), args.timeit_count, round(t,2)))
 
@@ -1268,11 +1268,10 @@ def test_model():
     #game = Game(args)
     #model = Model(game.state_shape(), game.action_size(), args)
     model.build_trt_engine(state_dict_copy, dtype=np.dtype(args.play_dtype))
-    
+
     t = timeit.timeit("model.game_predict_trt(game.state_normalized())", globals=globals(), number=args.timeit_count)
     print("timeit [tensorrt] : %s ms  [%d] [total %s s]" % (round((t/args.timeit_count)*1000,2), args.timeit_count, round(t,2)))
 
-        
+
 if __name__ == "__main__":
     test_model()
-
